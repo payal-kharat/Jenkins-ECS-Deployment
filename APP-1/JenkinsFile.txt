@@ -1,0 +1,166 @@
+pipeline{
+    agent any
+ 
+    environment{
+ 
+        AWS_REGION= 'ap-south-1'
+        AWS_ACCOUNT_ID= credentials('aws-account-id')
+        ECR_REGISTRY= "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REGISTRY_URL= "https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+ 
+        DB_IMAGE_DEV= 'employee-management-db-dev'
+        DB_IMAGE_QA= 'employee-management-db-qa'
+        DB_IMAGE_UAT= 'employee-management-db-uat'
+        DB_IMAGE_PROD= 'employee-management-db-prod'
+ 
+        AWS_CREDENTIALS= 'aws-ecr-credentials'
+ 
+        BUILD_CONTEXT= './db'
+ 
+    }
+ 
+    parameters{
+        choice(
+            name: 'Environment',
+            choices: ['dev','qa','uat','prod'],
+            description: 'select the Environment'
+        )
+    }
+ 
+    stages{
+        stage('Dev - Build & Push'){
+ 
+            when{
+                expression{
+                    params.Environment == 'dev'
+                }
+            }
+ 
+            steps{
+                script{
+                    // def image= docker.build("${env.ECR_REGISTRY}/${DB_IMAGE_DEV}:${GIT_COMMIT}",${env.BUILD_CONTEXT})
+ 
+                    // docker.withRegistry("${ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+                    //     image.push()
+                    // }
+ 
+                    buildAndPush("${env.DB_IMAGE_DEV}","${env.BUILD_CONTEXT}")
+ 
+                }
+            }
+        }
+ 
+        stage('promote Dev to QA'){
+            when{
+                expression{
+                    params.Environment == 'qa'
+                }
+            }
+            steps{
+                script{
+                    // docker.withRegistry("${ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+                    //     docker.image("${env.ECR_REGISTRY}/${env.DB_IMAGE_DEV}:${GIT_COMMIT}").pull()
+                    // }
+ 
+                    // sh "docker tag ${env.ECR_REGISTRY}/${env.DB_IMAGE_DEV}:${GIT_COMMIT} ${env.ECR_REGISTRY}/${env.DB_IMAGE_QA}:${GIT_COMMIT}"
+                   
+                    // docker.withRegistry("${env.ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+                    //     docker.image("${env.ECR_REGISTRY}/${env.DB_IMAGE_QA}:${GIT_COMMIT}").push()
+                    // }
+ 
+                    promoteImage("${env.DB_IMAGE_DEV}","${env.DB_IMAGE_QA}")
+ 
+                }
+            }
+        }
+ 
+        stage('promote QA to UAT'){
+            when{
+                expression{
+                    params.Environment == "uat"
+                }
+            }
+            steps{
+                script{
+                    // docker.withRegistry("${ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+                    //     docker.image("${env.ECR_REGISTRY}/${env.DB_IMAGE_QA}:${GIT_COMMIT}").pull()
+                    // }
+ 
+                    // sh "docker tag ${env.ECR_REGISTRY}/${env.DB_IMAGE_QA}:${GIT_COMMIT} ${env.ECR_REGISTRY}/${env.DB_IMAGE_UAT}:${GIT_COMMIT}"
+                   
+                    // docker.withRegistry("${env.ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+                    //     docker.image("${env.ECR_REGISTRY}/${env.DB_IMAGE_UAT}:${GIT_COMMIT}").push()
+                    // }
+ 
+                    promoteImage("${env.DB_IMAGE_QA}","${env.DB_IMAGE_UAT}")
+ 
+                }
+            }
+        }
+ 
+        stage('Approval for prod deployment'){
+            when{
+                expression{
+                    params.Environment == 'prod'
+                }
+            }
+ 
+            steps{
+                input message: 'promote to prod?',
+                      ok: "proceed"
+            }
+        }
+ 
+        stage('promote UAT to PROD'){
+            when{
+                expression{
+                    params.Environment == 'prod'
+                }
+            }
+            steps{
+                script{
+ 
+                    // docker.withRegistry("${ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+                    //     docker.image("${env.ECR_REGISTRY}/${env.DB_IMAGE_UAT}:${GIT_COMMIT}").pull()
+                    // }
+ 
+                    // sh "docker tag ${env.ECR_REGISTRY}/${DB_IMAGE_UAT}:${GIT_COMMIT} ${env.ECR_REGISTRY}/${DB_IMAGE_PROD}:${GIT_COMMIT}"
+                   
+                    // docker.withRegistry("${env.ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+                    //     docker.image("${env.ECR_REGISTRY}/${env.DB_IMAGE_PROD}:${GIT_COMMIT}").push()
+                    // }
+ 
+                    promoteImage("${env.DB_IMAGE_UAT}","${env.DB_IMAGE_PROD}")
+ 
+                }
+            }
+        }
+    }
+    post {
+        always {
+            deleteDir()
+        }
+    }
+}
+ 
+def buildAndPush(String DB_IMAGE, String BUILD_CONTEXT){
+    def image= docker.build("${env.ECR_REGISTRY}/${DB_IMAGE}:${env.GIT_COMMIT}","${BUILD_CONTEXT}")
+ 
+    docker.withRegistry("${env.ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+        image.push()
+    }
+}
+ 
+def promoteImage(String sourceImage, String targetImage){
+ 
+    docker.withRegistry("${env.ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+        docker.image("${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT}").pull()
+    }
+ 
+    sh "docker tag ${env.ECR_REGISTRY}/${sourceImage}:${env.GIT_COMMIT} ${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}"
+                   
+    docker.withRegistry("${env.ECR_REGISTRY_URL}","ecr:${env.AWS_REGION}:${env.AWS_CREDENTIALS}"){
+        docker.image("${env.ECR_REGISTRY}/${targetImage}:${env.GIT_COMMIT}").push()
+    }
+}
+ 
