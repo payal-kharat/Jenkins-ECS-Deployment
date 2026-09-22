@@ -1,0 +1,400 @@
+pipeline {
+
+    agent any
+
+    environment {
+
+        AWS_REGION = "us-east-1"
+
+        ECR_REGISTRY =
+            "552940445807.dkr.ecr.us-east-1.amazonaws.com"
+
+        FRONTEND_IMAGE =
+            "jenkins-ecs-deployment-frontend"
+
+        BACKEND_IMAGE =
+            "jenkins-ecs-deployment-backend"
+
+        DB_IMAGE =
+            "jenkins-ecs-deployment-db"
+
+        IMAGE_TAG = "${BUILD_NUMBER}"
+
+        DEV_CLUSTER =
+            "jenkins-ecs-deployment-dev-cluster"
+
+        QA_CLUSTER =
+            "jenkins-ecs-deployment-qa-cluster"
+
+        UAT_CLUSTER =
+            "jenkins-ecs-deployment-uat-cluster"
+
+        PROD_CLUSTER =
+            "jenkins-ecs-deployment-prod-cluster"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build and Push Images') {
+
+            steps {
+
+                script {
+
+                    buildAndPush(
+                        FRONTEND_IMAGE,
+                        "APP-1/nginx-flask-mysql/proxy/Dockerfile",
+                        "APP-1/nginx-flask-mysql/proxy"
+                    )
+
+                    buildAndPush(
+                        BACKEND_IMAGE,
+                        "APP-1/nginx-flask-mysql/backend/Dockerfile",
+                        "APP-1/nginx-flask-mysql/backend"
+                    )
+
+                    buildAndPush(
+                        DB_IMAGE,
+                        "APP-1/nginx-flask-mysql/db/Dockerfile",
+                        "APP-1/nginx-flask-mysql/db"
+                    )
+                }
+            }
+        }
+
+        stage('Deploy Dev') {
+
+            steps {
+
+                script {
+
+                    deployToECS(
+                        DEV_CLUSTER,
+                        "jenkins-ecs-deployment-dev-frontend-service",
+                        "frontend",
+                        FRONTEND_IMAGE
+                    )
+
+                    deployToECS(
+                        DEV_CLUSTER,
+                        "jenkins-ecs-deployment-dev-backend-service",
+                        "backend",
+                        BACKEND_IMAGE
+                    )
+
+                    deployToECS(
+                        DEV_CLUSTER,
+                        "jenkins-ecs-deployment-dev-db-service",
+                        "db",
+                        DB_IMAGE
+                    )
+                }
+            }
+        }
+
+        stage('Deploy QA') {
+
+            steps {
+
+                script {
+
+                    deployToECS(
+                        QA_CLUSTER,
+                        "jenkins-ecs-deployment-qa-frontend-service",
+                        "frontend",
+                        FRONTEND_IMAGE
+                    )
+
+                    deployToECS(
+                        QA_CLUSTER,
+                        "jenkins-ecs-deployment-qa-backend-service",
+                        "backend",
+                        BACKEND_IMAGE
+                    )
+
+                    deployToECS(
+                        QA_CLUSTER,
+                        "jenkins-ecs-deployment-qa-db-service",
+                        "db",
+                        DB_IMAGE
+                    )
+                }
+            }
+        }
+
+        stage('Deploy UAT') {
+
+            steps {
+
+                script {
+
+                    deployToECS(
+                        UAT_CLUSTER,
+                        "jenkins-ecs-deployment-uat-frontend-service",
+                        "frontend",
+                        FRONTEND_IMAGE
+                    )
+
+                    deployToECS(
+                        UAT_CLUSTER,
+                        "jenkins-ecs-deployment-uat-backend-service",
+                        "backend",
+                        BACKEND_IMAGE
+                    )
+
+                    deployToECS(
+                        UAT_CLUSTER,
+                        "jenkins-ecs-deployment-uat-db-service",
+                        "db",
+                        DB_IMAGE
+                    )
+                }
+            }
+        }
+
+        stage('Production Approval') {
+
+            steps {
+
+                input(
+                    message: "Deploy build ${BUILD_NUMBER} to Production?",
+                    ok: "Deploy to Production"
+                )
+            }
+        }
+
+        stage('Deploy Prod') {
+
+            steps {
+
+                script {
+
+                    deployToECS(
+                        PROD_CLUSTER,
+                        "jenkins-ecs-deployment-prod-frontend-service",
+                        "frontend",
+                        FRONTEND_IMAGE
+                    )
+
+                    deployToECS(
+                        PROD_CLUSTER,
+                        "jenkins-ecs-deployment-prod-backend-service",
+                        "backend",
+                        BACKEND_IMAGE
+                    )
+
+                    deployToECS(
+                        PROD_CLUSTER,
+                        "jenkins-ecs-deployment-prod-db-service",
+                        "db",
+                        DB_IMAGE
+                    )
+                }
+            }
+        }
+    }
+
+    post {
+
+        always {
+            cleanWs()
+        }
+    }
+}
+
+
+/*
+ * ============================================================
+ * FUNCTION 1
+ * Build Docker image and push it to ECR
+ * ============================================================
+ */
+
+def buildAndPush(
+    String imageName,
+    String dockerfile,
+    String context
+) {
+
+    def image =
+        "${ECR_REGISTRY}/${imageName}:${IMAGE_TAG}"
+
+    echo "=============================================="
+    echo "BUILDING IMAGE"
+    echo "Image: ${image}"
+    echo "=============================================="
+
+    sh """
+        set -e
+
+        aws ecr get-login-password \
+            --region ${AWS_REGION} | \
+        docker login \
+            --username AWS \
+            --password-stdin ${ECR_REGISTRY}
+
+        docker build \
+            -f ${dockerfile} \
+            -t ${image} \
+            ${context}
+
+        docker push ${image}
+    """
+
+    echo "Successfully pushed: ${image}"
+}
+
+
+/*
+ * ============================================================
+ * FUNCTION 2
+ * Deploy existing ECR image to ECS
+ * ============================================================
+ */
+
+def deployToECS(
+    String cluster,
+    String service,
+    String container,
+    String imageName
+) {
+
+    def image =
+        "${ECR_REGISTRY}/${imageName}:${IMAGE_TAG}"
+
+    echo "=============================================="
+    echo "DEPLOYING TO ECS"
+    echo "Cluster   : ${cluster}"
+    echo "Service   : ${service}"
+    echo "Container : ${container}"
+    echo "Image     : ${image}"
+    echo "=============================================="
+
+    sh """
+        set -e
+
+        echo "Getting current task definition..."
+
+        CURRENT_TASK_DEFINITION=\$(aws ecs describe-services \
+            --cluster ${cluster} \
+            --services ${service} \
+            --region ${AWS_REGION} \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+        echo "Current task definition:"
+        echo "\$CURRENT_TASK_DEFINITION"
+
+
+        echo "Getting task definition JSON..."
+
+        aws ecs describe-task-definition \
+            --task-definition \$CURRENT_TASK_DEFINITION \
+            --region ${AWS_REGION} \
+            --query 'taskDefinition' \
+            --output json \
+            > task-definition.json
+
+
+        echo "Updating container image..."
+
+        python3 - <<'PY'
+
+import json
+
+with open("task-definition.json", "r") as f:
+    task_definition = json.load(f)
+
+container_name = "${container}"
+new_image = "${image}"
+
+found = False
+
+for container in task_definition["containerDefinitions"]:
+
+    if container["name"] == container_name:
+
+        container["image"] = new_image
+        found = True
+
+        print("Container updated:", container_name)
+        print("New image:", new_image)
+
+
+if not found:
+
+    raise Exception(
+        "Container '${container}' not found"
+    )
+
+
+# Remove AWS generated fields
+
+fields_to_remove = [
+    "taskDefinitionArn",
+    "revision",
+    "status",
+    "requiresAttributes",
+    "compatibilities"
+]
+
+for field in fields_to_remove:
+
+    task_definition.pop(field, None)
+
+
+with open("new-task-definition.json", "w") as f:
+
+    json.dump(
+        task_definition,
+        f,
+        indent=2
+    )
+
+PY
+
+
+        echo "Registering new task definition..."
+
+        NEW_TASK_DEFINITION=\$(aws ecs register-task-definition \
+            --cli-input-json file://new-task-definition.json \
+            --region ${AWS_REGION} \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+        echo "New task definition:"
+        echo "\$NEW_TASK_DEFINITION"
+
+
+        echo "Updating ECS service..."
+
+        aws ecs update-service \
+            --cluster ${cluster} \
+            --service ${service} \
+            --task-definition \$NEW_TASK_DEFINITION \
+            --region ${AWS_REGION} \
+            --no-cli-pager
+
+
+        echo "Waiting for service to become stable..."
+
+        aws ecs wait services-stable \
+            --cluster ${cluster} \
+            --services ${service} \
+            --region ${AWS_REGION}
+
+
+        echo "=============================================="
+        echo "DEPLOYMENT SUCCESSFUL"
+        echo "Cluster : ${cluster}"
+        echo "Service : ${service}"
+        echo "Image   : ${image}"
+        echo "=============================================="
+    """
+}
