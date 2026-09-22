@@ -341,7 +341,10 @@ fields_to_remove = [
     "revision",
     "status",
     "requiresAttributes",
-    "compatibilities"
+    "compatibilities",
+    "registeredAt",
+    "deregisteredAt",
+    "registeredBy"
 ]
 
 for field in fields_to_remove:
