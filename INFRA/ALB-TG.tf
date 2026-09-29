@@ -24,7 +24,7 @@ resource "aws_lb_target_group" "backend" {
   for_each = local.service_environments
 
   name        = "${var.project_name}-${each.key}-b-tg"
-  port        = 8000
+  port        = 8080
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = aws_vpc.main.id
