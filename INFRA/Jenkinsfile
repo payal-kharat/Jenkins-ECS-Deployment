@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'us-east-1'
+        TF_IN_AUTOMATION = 'true'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                sh '''
+                    terraform version
+                    terraform init -input=false
+                '''
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                sh 'terraform validate'
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                sh 'terraform plan -input=false -out=tfplan'
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                sh 'terraform apply -input=false -auto-approve tfplan'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Terraform infrastructure deployment completed successfully.'
+            sh 'terraform output'
+        }
+        failure {
+            echo 'Terraform infrastructure deployment failed. Check the console output.'
+        }
+    }
+}
