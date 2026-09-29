@@ -1,7 +1,4 @@
-# ============================================================
-# ALB SECURITY GROUP
-# Internet -> ALB :80
-# ============================================================
+
 
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-alb-sg"
@@ -29,17 +26,12 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# ============================================================
-# ECS SECURITY GROUP
-# ALB -> frontend/backend
-# ECS -> backend through Service Connect
-# ============================================================
-
 resource "aws_security_group" "ecs" {
   name        = "${var.project_name}-ecs-sg"
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
 
+  # ALB -> Frontend
   ingress {
     description     = "ALB to frontend"
     from_port       = 80
@@ -48,6 +40,7 @@ resource "aws_security_group" "ecs" {
     security_groups = [aws_security_group.alb.id]
   }
 
+  # ALB -> Backend
   ingress {
     description     = "ALB to backend"
     from_port       = 8080
@@ -57,13 +50,17 @@ resource "aws_security_group" "ecs" {
   }
 
   ingress {
-    description     = "ECS services to backend through Service Connect"
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ecs.id]
+    description = "ECS services to backend through Service Connect"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = [
+      aws_subnet.private_1.cidr_block,
+      aws_subnet.private_2.cidr_block
+    ]
   }
 
+  # ECS -> Internet/AWS services
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -77,10 +74,6 @@ resource "aws_security_group" "ecs" {
   }
 }
 
-# ============================================================
-# DATABASE SECURITY GROUP
-# ECS -> MySQL :3306 only
-# ============================================================
 
 resource "aws_security_group" "db" {
   name        = "${var.project_name}-db-sg"
