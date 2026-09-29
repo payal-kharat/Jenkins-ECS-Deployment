@@ -106,17 +106,6 @@ resource "aws_ecs_task_definition" "db" {
         }
       ]
 
-      environment = [
-        {
-          name  = "MYSQL_ROOT_PASSWORD"
-          value = var.db_root_password
-        },
-        {
-          name  = "MYSQL_DATABASE"
-          value = "appdb"
-        }
-      ]
-
       logConfiguration = {
         logDriver = "awslogs"
         options = {
