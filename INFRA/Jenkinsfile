@@ -17,18 +17,15 @@ pipeline {
             }
         }
 
-        stage('Check INFRA Directory') {
+        stage('Check Terraform Files') {
             steps {
                 sh '''
                     echo "======================================"
-                    echo "Current Jenkins workspace"
+                    echo "Checking Terraform Configuration"
                     echo "======================================"
 
+                    echo "Current directory:"
                     pwd
-
-                    echo ""
-                    echo "INFRA directory contents:"
-                    ls -la INFRA
 
                     echo ""
                     echo "Terraform files:"
@@ -103,8 +100,9 @@ pipeline {
     post {
 
         success {
-            
-            echo 'Terraform infrastructure deployment completed successfully.'
+            echo "======================================"
+            echo "Terraform infrastructure deployment completed successfully."
+            echo "======================================"
 
             dir("${TF_DIR}") {
                 sh '''
@@ -115,10 +113,11 @@ pipeline {
         }
 
         failure {
-            
-            echo 'Terraform infrastructure deployment failed.'
-            echo 'Check the Jenkins console output.'
-           
+            echo "======================================"
+            echo "Terraform infrastructure deployment failed."
+            echo "Check the Jenkins console output."
+            echo "======================================"
         }
     }
 }
+
