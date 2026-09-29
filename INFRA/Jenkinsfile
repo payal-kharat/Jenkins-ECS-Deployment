@@ -20,7 +20,7 @@ pipeline {
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-terraform']
+                     credentialsId: 'AWS']
                 ]) {
                     sh '''
                         echo "======================================"
@@ -38,7 +38,7 @@ pipeline {
                 dir("${TF_DIR}") {
                     withCredentials([
                         [$class: 'AmazonWebServicesCredentialsBinding',
-                         credentialsId: 'aws-terraform']
+                         credentialsId: 'AWS']
                     ]) {
                         sh '''
                             echo "======================================"
@@ -58,7 +58,7 @@ pipeline {
                 dir("${TF_DIR}") {
                     withCredentials([
                         [$class: 'AmazonWebServicesCredentialsBinding',
-                         credentialsId: 'aws-terraform']
+                         credentialsId: 'AWS']
                     ]) {
                         sh '''
                             echo "======================================"
@@ -77,7 +77,7 @@ pipeline {
                 dir("${TF_DIR}") {
                     withCredentials([
                         [$class: 'AmazonWebServicesCredentialsBinding',
-                         credentialsId: 'aws-terraform']
+                         credentialsId: 'AWS']
                     ]) {
                         sh '''
                             echo "======================================"
@@ -98,7 +98,7 @@ pipeline {
                 dir("${TF_DIR}") {
                     withCredentials([
                         [$class: 'AmazonWebServicesCredentialsBinding',
-                         credentialsId: 'aws-terraform']
+                         credentialsId: 'AWS']
                     ]) {
                         sh '''
                             echo "======================================"
