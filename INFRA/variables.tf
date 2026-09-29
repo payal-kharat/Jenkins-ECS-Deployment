@@ -34,8 +34,4 @@ variable "private_subnet_cidrs" {
   default     = ["10.0.11.0/24", "10.0.12.0/24"]
 }
 
-variable "db_root_password" {
-  description = "MySQL root password. Pass this securely through TF_VAR_db_root_password or Jenkins credentials."
-  type        = string
-  sensitive   = true
-}
+
