@@ -1,53 +1,124 @@
+
 pipeline {
+
     agent any
 
     environment {
         AWS_REGION = 'us-east-1'
         TF_IN_AUTOMATION = 'true'
+        TF_DIR = 'INFRA'
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Terraform Init') {
+        stage('Check INFRA Directory') {
             steps {
                 sh '''
-                    terraform version
-                    terraform init -input=false
+                    echo "======================================"
+                    echo "Current Jenkins workspace"
+                    echo "======================================"
+
+                    pwd
+
+                    echo ""
+                    echo "INFRA directory contents:"
+                    ls -la INFRA
+
+                    echo ""
+                    echo "Terraform files:"
+                    find INFRA -name "*.tf" -type f | sort
                 '''
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh '''
+                        echo "======================================"
+                        echo "Terraform Init"
+                        echo "======================================"
+
+                        terraform version
+                        terraform init -input=false
+                    '''
+                }
             }
         }
 
         stage('Terraform Validate') {
             steps {
-                sh 'terraform validate'
+                dir("${TF_DIR}") {
+                    sh '''
+                        echo "======================================"
+                        echo "Terraform Validate"
+                        echo "======================================"
+
+                        terraform validate
+                    '''
+                }
             }
         }
 
         stage('Terraform Plan') {
             steps {
-                sh 'terraform plan -input=false -out=tfplan'
+                dir("${TF_DIR}") {
+                    sh '''
+                        echo "======================================"
+                        echo "Terraform Plan"
+                        echo "======================================"
+
+                        terraform plan \
+                            -input=false \
+                            -out=tfplan
+                    '''
+                }
             }
         }
 
         stage('Terraform Apply') {
             steps {
-                sh 'terraform apply -input=false -auto-approve tfplan'
+                dir("${TF_DIR}") {
+                    sh '''
+                        echo "======================================"
+                        echo "Terraform Apply"
+                        echo "======================================"
+
+                        terraform apply \
+                            -input=false \
+                            -auto-approve \
+                            tfplan
+                    '''
+                }
             }
         }
     }
 
     post {
+
         success {
+            
             echo 'Terraform infrastructure deployment completed successfully.'
-            sh 'terraform output'
+
+            dir("${TF_DIR}") {
+                sh '''
+                    echo "Terraform Outputs:"
+                    terraform output
+                '''
+            }
         }
+
         failure {
-            echo 'Terraform infrastructure deployment failed. Check the console output.'
+            
+            echo 'Terraform infrastructure deployment failed.'
+            echo 'Check the Jenkins console output.'
+           
         }
     }
 }
