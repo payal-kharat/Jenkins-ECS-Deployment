@@ -1,4 +1,3 @@
-
 pipeline {
 
     agent any
@@ -17,34 +16,39 @@ pipeline {
             }
         }
 
-        stage('Check Terraform Files') {
+        stage('Test AWS Credentials') {
             steps {
-                sh '''
-                    echo "======================================"
-                    echo "Checking Terraform Configuration"
-                    echo "======================================"
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-terraform']
+                ]) {
+                    sh '''
+                        echo "======================================"
+                        echo "Testing AWS Credentials"
+                        echo "======================================"
 
-                    echo "Current directory:"
-                    pwd
-
-                    echo ""
-                    echo "Terraform files:"
-                    find INFRA -name "*.tf" -type f | sort
-                '''
+                        aws sts get-caller-identity
+                    '''
+                }
             }
         }
 
         stage('Terraform Init') {
             steps {
                 dir("${TF_DIR}") {
-                    sh '''
-                        echo "======================================"
-                        echo "Terraform Init"
-                        echo "======================================"
+                    withCredentials([
+                        [$class: 'AmazonWebServicesCredentialsBinding',
+                         credentialsId: 'aws-terraform']
+                    ]) {
+                        sh '''
+                            echo "======================================"
+                            echo "Terraform Init"
+                            echo "======================================"
 
-                        terraform version
-                        terraform init -input=false
-                    '''
+                            terraform version
+                            terraform init -input=false
+                        '''
+                    }
                 }
             }
         }
@@ -52,13 +56,18 @@ pipeline {
         stage('Terraform Validate') {
             steps {
                 dir("${TF_DIR}") {
-                    sh '''
-                        echo "======================================"
-                        echo "Terraform Validate"
-                        echo "======================================"
+                    withCredentials([
+                        [$class: 'AmazonWebServicesCredentialsBinding',
+                         credentialsId: 'aws-terraform']
+                    ]) {
+                        sh '''
+                            echo "======================================"
+                            echo "Terraform Validate"
+                            echo "======================================"
 
-                        terraform validate
-                    '''
+                            terraform validate
+                        '''
+                    }
                 }
             }
         }
@@ -66,15 +75,20 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 dir("${TF_DIR}") {
-                    sh '''
-                        echo "======================================"
-                        echo "Terraform Plan"
-                        echo "======================================"
+                    withCredentials([
+                        [$class: 'AmazonWebServicesCredentialsBinding',
+                         credentialsId: 'aws-terraform']
+                    ]) {
+                        sh '''
+                            echo "======================================"
+                            echo "Terraform Plan"
+                            echo "======================================"
 
-                        terraform plan \
-                            -input=false \
-                            -out=tfplan
-                    '''
+                            terraform plan \
+                                -input=false \
+                                -out=tfplan
+                        '''
+                    }
                 }
             }
         }
@@ -82,16 +96,21 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 dir("${TF_DIR}") {
-                    sh '''
-                        echo "======================================"
-                        echo "Terraform Apply"
-                        echo "======================================"
+                    withCredentials([
+                        [$class: 'AmazonWebServicesCredentialsBinding',
+                         credentialsId: 'aws-terraform']
+                    ]) {
+                        sh '''
+                            echo "======================================"
+                            echo "Terraform Apply"
+                            echo "======================================"
 
-                        terraform apply \
-                            -input=false \
-                            -auto-approve \
-                            tfplan
-                    '''
+                            terraform apply \
+                                -input=false \
+                                -auto-approve \
+                                tfplan
+                        '''
+                    }
                 }
             }
         }
@@ -100,23 +119,24 @@ pipeline {
     post {
 
         success {
-            echo "======================================"
             echo "Terraform infrastructure deployment completed successfully."
-            echo "======================================"
 
             dir("${TF_DIR}") {
-                sh '''
-                    echo "Terraform Outputs:"
-                    terraform output
-                '''
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'AWS']
+                ]) {
+                    sh '''
+                        echo "Terraform Outputs:"
+                        terraform output
+                    '''
+                }
             }
         }
 
         failure {
-            echo "======================================"
             echo "Terraform infrastructure deployment failed."
             echo "Check the Jenkins console output."
-            echo "======================================"
         }
     }
 }
