@@ -50,16 +50,16 @@ resource "aws_security_group" "ecs" {
 
   ingress {
     description     = "ALB to backend"
-    from_port       = 8000
-    to_port         = 8000
+    from_port       = 8080
+    to_port         = 8080
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
 
   ingress {
     description     = "ECS services to backend through Service Connect"
-    from_port       = 8000
-    to_port         = 8000
+    from_port       = 8080
+    to_port         = 8080
     protocol        = "tcp"
     security_groups = [aws_security_group.ecs.id]
   }
